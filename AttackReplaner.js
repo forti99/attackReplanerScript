@@ -1,13 +1,44 @@
 // ==UserScript==
-// @name         Attack Replaner
-// @version      1.0
-// @description
-// @author       forti99
-// @match     https://ds-ultimate.de/tools/attackPlanner*
+// @name            Attack Replaner
+// @version         1.0
+// @description     Fügt in DS-Ultimate einen Button hinzu über den das Umplanen vorhandener Angriffe gestartet werden kann
+// @author          forti99
+// @match           https://ds-ultimate.de/tools/attackPlanner*
 // ==/UserScript==
 
+class Point {
+    constructor(x, y, pointId) {
+        this.x = x;
+        this.y = y;
+        this.pointId = pointId;
+    }
+
+    calculateDistance(point2) {
+        const dx = this.x - point2.x;
+        const dy = this.y - point2.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+}
+
+class Attack {
+    constructor(startPoint, endPoint, unit, arrivalTime, distance) {
+        this.startPoint = startPoint;
+        this.endPoint = endPoint;
+        this.unit = unit;
+        this.arrivalTime = arrivalTime;
+        this.distance = distance;
+    }
+}
+
+class processedAttackPlan {
+    constructor(attacks, maxDistance, maxDistanceGap) {
+        this.attacks = attacks;
+        this.maxDistance = maxDistance;
+        this.maxDistanceGap = maxDistanceGap;
+    }
+}
+
 (function () {
-    //Timeout-Funktion sollte durch einen Button zum Klicken ersetzt werden
     buttonHinzufuegen();
 })();
 
@@ -21,55 +52,16 @@ function buttonHinzufuegen() {
     speichernBtn.parentNode.insertBefore(umplanenBtn, speichernBtn.nextSibling);
 }
 
-function calculateNewPlans(timesToRun, option) {
-    const rows = document.getElementById('data1').children[1].children;
-    let startPoints = [rows.length];
-    let endPoints = [rows.length];
-    const units = [rows.length];
-    const arrivalTimes = [rows.length];
-    getAttackPlanData(startPoints, endPoints, units, arrivalTimes, rows);
-
-    const allGeneratedPlans = generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun);
-
-    const processedAttackPlans = processAttackPlans(allGeneratedPlans);
-
-    const bestAttackPlan = findBestAttackPlan(processedAttackPlans, option);
-
-    return generateUltimatePlan(bestAttackPlan, false, units, arrivalTimes);
-}
-
-function findAndDisplayPlan() {
-    const timesToRun = parseFloat(document.getElementById('number1').value);
-    const option = parseFloat(document.getElementById('number2').value);
-    const ultimatePlan = calculateNewPlans(timesToRun, option);
-
-    let resultTextArea = document.getElementById('resultTextArea');
-    resultTextArea.rows = ultimatePlan.length;
-    resultTextArea.value = ultimatePlan.join('\n');
-
-    let textWidth = ultimatePlan[0].length * 10
-    resultTextArea.style.width = textWidth + 'px';
-
-    let resultDiv = document.getElementById('result');
-    resultDiv.style.display = 'block';
-}
-
-function cancel() {
-    let eingabeContainer = document.querySelector('.col-12.d-print-none');
-    let popupDiv = eingabeContainer.querySelector('#inputForm').parentNode;
-    eingabeContainer.removeChild(popupDiv);
-}
-
 function openPopupEingabe() {
     let eingabeContainer = document.querySelector('.col-12.d-print-none');
 
     let popupContent = `
         <h2>Eingabeformular</h2>
         <form id="inputForm">
-            <label for="number1">Anzahl Rechenversuche:</label>
-            <input type="number" id="number1" required><br><br>
-            <label for="number2">ausgewählte Option:</label>
-            <input type="number" id="number2" required><br><br>
+            <label for="anzahlRechenversuche">Anzahl Rechenversuche:</label>
+            <input type="number" id="anzahlRechenversuche" required><br><br>
+            <label for="option">ausgewählte Option:</label>
+            <input type="number" id="option" required><br><br>
             <button type="button" id="abbrechenButton">Abbrechen</button>
             <button type="button" id="planFindenButton">Plan finden</button>
         </form>
@@ -88,48 +80,35 @@ function openPopupEingabe() {
     document.getElementById("planFindenButton").onclick = findAndDisplayPlan;
 }
 
-function getAttackPlanData(startPoints, endPoints, units, arrivalTimes, rows) {
-    fillStartAndEndPoints(startPoints, endPoints, rows);
-    fillArrivalTimes(arrivalTimes, rows);
-    fillUnits(units, rows);
+function findAndDisplayPlan() {
+    const timesToRun = parseInt(document.getElementById('anzahlRechenversuche').value);
+    const option = parseInt(document.getElementById('option').value);
+    const ultimatePlan = calculateNewPlans(timesToRun, option);
+
+    let resultTextArea = document.getElementById('resultTextArea');
+    let textWidth = ultimatePlan[0].length * 10
+
+    resultTextArea.rows = ultimatePlan.length;
+    resultTextArea.value = ultimatePlan.join('\n');
+    resultTextArea.style.width = textWidth + 'px';
+
+    let resultDiv = document.getElementById('result');
+    resultDiv.style.display = 'block';
 }
 
-function fillStartAndEndPoints(startPoints, endPoints, rows) {
-    for (let i = 0; i < rows.length; i++) {
-        const startPointText = rows[i].children[1].innerHTML;
-        const endPointText = rows[i].children[3].innerHTML;
+function calculateNewPlans(timesToRun, option) {
+    const rows = document.getElementById('data1').children[1].children;
+    [startPoints, endPoints, units, arrivalTimes] = [[rows.length], [rows.length], [rows.length], [rows.length]];
 
-        const startPointCoordsWithSeperator = startPointText.match(/\[(.*?)]/)[1];
-        const startPointCoords = startPointCoordsWithSeperator.split(/\|/);
+    fillOriginalPlanData(startPoints, endPoints, units, arrivalTimes);
 
-        const endPointCoordsWithSeperator = endPointText.match(/\[(.*?)]/)[1];
-        const endPointCoords = endPointCoordsWithSeperator.split(/\|/);
+    const allGeneratedPlans = generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun);
 
-        let startPointId = startPointText.match(/\/(\d+)(?=")/)[1];
-        let endPointId = endPointText.match(/\/(\d+)(?=")/)[1];
+    const processedAttackPlans = processAttackPlans(allGeneratedPlans);
 
-        startPoints[i] = new Point(parseInt(startPointCoords[0]), parseInt(startPointCoords[1]), parseInt(startPointId));
-        endPoints[i] = new Point(parseInt(endPointCoords[0]), parseInt(endPointCoords[1]), parseInt(endPointId));
-    }
-}
+    const bestAttackPlan = findBestAttackPlan(processedAttackPlans, option);
 
-function fillArrivalTimes(arrivalTimes, rows) {
-    for (let i = 0; i < rows.length; i++) {
-        const arrivalTimeText = rows[i].children[8].innerText;
-        arrivalTimes[i] = textToDate(arrivalTimeText);
-    }
-}
-
-function fillUnits(units, rows) {
-    for (let i = 0; i < rows.length; i++) {
-        const unitsText = rows[i].children[5].innerHTML;
-        units[i] = unitsText.match(/\/([a-zA-Z]+)\./)[1];
-    }
-}
-
-function textToDate(text) {
-    const parts = text.split(/[ .:]/);
-    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]), parseInt(parts[6])).getTime();
+    return generateUltimatePlan(bestAttackPlan, false, units, arrivalTimes);
 }
 
 function generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun) {
@@ -150,7 +129,7 @@ function generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, 
             if (a.distance < b.distance) return 1;
             if (a.distance > b.distance) return -1;
             return 0;
-        })
+        });
         allGeneratedAttackPlans.add(attackPlan)
     }
     return allGeneratedAttackPlans;
@@ -214,44 +193,39 @@ function generateUltimatePlan(processedAttackPlan, isUTPlan, units, arrivalTimes
     return ultimatePlan;
 }
 
+function cancel() {
+    let eingabeContainer = document.querySelector('.col-12.d-print-none');
+    let popupDiv = eingabeContainer.querySelector('#inputForm').parentNode;
+    eingabeContainer.removeChild(popupDiv);
+}
+
+function fillOriginalPlanData(startPoints, endPoints, rows, arrivalTimes, units) {
+    for (let i = 0; i < rows.length; i++) {
+        //startPoints and endPoints
+        const startPointText = rows[i].children[1].innerHTML;
+        const endPointText = rows[i].children[3].innerHTML;
+
+        const startPointCoords = startPointText.match(/\[(.*?)]/)[1].split(/\|/);
+        const endPointCoords = endPointText.match(/\[(.*?)]/)[1].split(/\|/);
+
+        let startPointId = parseInt(startPointText.match(/\/(\d+)(?=")/)[1]);
+        let endPointId = parseInt(endPointText.match(/\/(\d+)(?=")/)[1]);
+
+        startPoints[i] = new Point(parseInt(startPointCoords[0]), parseInt(startPointCoords[1]), startPointId);
+        endPoints[i] = new Point(parseInt(endPointCoords[0]), parseInt(endPointCoords[1]), endPointId);
+
+        //arrivalTimes
+        const dateParts = rows[i].children[8].innerText.split(/[ .:]/);
+        arrivalTimes[i] = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]), parseInt(dateParts[3]), parseInt(dateParts[4]), parseInt(dateParts[5]), parseInt(dateParts[6])).getTime();
+
+        //units
+        units[i] = rows[i].children[5].innerHTML.match(/\/([a-zA-Z]+)\./)[1];
+    }
+}
+
 function shuffleArray(array) {
-    for (let i = 0; i < array.length; i++) {
+    for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        const temp = array[i];
-        array[i] = array[j];
-        array[j] = temp;
+        [array[i], array[j]] = [array[j], array[i]];
     }
-}
-
-class Point {
-    constructor(x, y, pointId) {
-        this.x = x;
-        this.y = y;
-        this.pointId = pointId;
-    }
-
-    calculateDistance(point2) {
-        const xDistance = Math.abs(this.x - point2.x);
-        const yDistance = Math.abs(this.y - point2.y);
-        return Math.sqrt(xDistance * xDistance + yDistance * yDistance);
-    }
-}
-
-class Attack {
-    constructor(startPoint, endPoint, unit, arrivalTime, distance) {
-        this.startPoint = startPoint;
-        this.endPoint = endPoint;
-        this.unit = unit;
-        this.arrivalTime = arrivalTime;
-        this.distance = distance;
-    }
-}
-
-class processedAttackPlan {
-    constructor(attacks, maxDistance, maxDistanceGap) {
-        this.attacks = attacks;
-        this.maxDistance = maxDistance;
-        this.maxDistanceGap = maxDistanceGap;
-    }
-
 }
