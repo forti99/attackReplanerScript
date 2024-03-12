@@ -43,61 +43,80 @@ class processedAttackPlan {
 })();
 
 function buttonHinzufuegen() {
-    const speichernBtn = document.querySelector('.btn.btn-sm.btn-success.float-right');
-    const umplanenBtn = document.createElement('input');
-    umplanenBtn.type = 'button';
-    umplanenBtn.className = 'btn btn-sm btn-info float-left ml-4';
-    umplanenBtn.value = 'Angriffe umplanen';
+    const speichernBtn = document.querySelector(".btn.btn-sm.btn-success.float-right");
+    const umplanenBtn = document.createElement("input");
+    umplanenBtn.type = "button";
+    umplanenBtn.className = "btn btn-sm btn-info float-left ml-4";
+    umplanenBtn.value = "Angriffe umplanen";
     umplanenBtn.onclick = openPopupEingabe;
     speichernBtn.parentNode.insertBefore(umplanenBtn, speichernBtn.nextSibling);
 }
 
 function openPopupEingabe() {
-    let eingabeContainer = document.querySelector('.col-12.d-print-none');
+    let eingabeContainer = document.querySelector(".col-12.d-print-none");
 
     let popupContent = `
         <h2>Eingabeformular</h2>
         <form id="inputForm">
-            <label for="anzahlRechenversuche">Anzahl Rechenversuche:</label>
-            <input type="number" id="anzahlRechenversuche" required><br><br>
-            <label for="option">ausgewählte Option:</label>
-            <input type="number" id="option" required><br><br>
+            <label for="options">ausgewählte Option:</label>
+            <select id="options">
+                <option value="biggestMaxDistance">größte maximale Distanz</option>
+                <option value="shortestMaxDistance">kleinste maximale Distanz</option>
+                <option value="biggestMaxDistanceGap">größte maximale Lücke</option>
+                <option value="shortestMaxDistanceGap">kleinste maximale Lücke</option>
+            </select><br><br>
+            <label for="anzahlRechenversuche">Anzahl Rechenversuche (beeinflusst Dauer bis zum Ergebnis):</label>
+            <input type="number" id="anzahlRechenversuche" min="1" max="1000000" value="10000"><br><br>
             <button type="button" id="abbrechenButton">Abbrechen</button>
-            <button type="button" id="planFindenButton">Plan finden</button>
+            <button type="button" id="planFindenButton">Neuen Plan finden</button>
         </form>
-        <div id="result" style="display: none;">
-            <h2>Ergebnis</h2>
-            <textarea id="resultTextArea" rows="70" cols="100" readonly></textarea>
+        <div id="result">
+            <h2>Neuer Plan:</h2>
+            <button type="button" id="neuerPlanKopierenButton">Neuen Plan in Zwischenablage kopieren</button>
+            <br><br>
+            <textarea id="resultTextArea" style="width: 80%;" rows="25" readonly></textarea>
         </div>
-    `;
+        `;
 
-    let popupDiv = document.createElement('div');
+    let popupDiv = document.createElement("div");
     popupDiv.className = "card mt-2";
     popupDiv.innerHTML = popupContent;
 
     eingabeContainer.appendChild(popupDiv);
     document.getElementById("abbrechenButton").onclick = cancel;
     document.getElementById("planFindenButton").onclick = findAndDisplayPlan;
+    document.getElementById("neuerPlanKopierenButton").onclick = copyNewPlanToClipboard;
 }
 
 function findAndDisplayPlan() {
-    const timesToRun = parseInt(document.getElementById('anzahlRechenversuche').value);
-    const option = parseInt(document.getElementById('option').value);
+    const timesToRun = parseInt(document.getElementById("anzahlRechenversuche").value);
+    const option = document.getElementById("option").value;
     const ultimatePlan = calculateNewPlans(timesToRun, option);
 
-    let resultTextArea = document.getElementById('resultTextArea');
+    let resultTextArea = document.getElementById("resultTextArea");
     let textWidth = ultimatePlan[0].length * 10
 
     resultTextArea.rows = ultimatePlan.length;
-    resultTextArea.value = ultimatePlan.join('\n');
-    resultTextArea.style.width = textWidth + 'px';
+    resultTextArea.value = ultimatePlan.join("\n");
+    resultTextArea.style.width = textWidth + "px";
 
-    let resultDiv = document.getElementById('result');
-    resultDiv.style.display = 'block';
+    let resultDiv = document.getElementById("result");
+    resultDiv.style.display = "block";
+}
+
+function copyNewPlanToClipboard() {
+    const neuerPlanTextArea = document.getElementById("resultTextArea");
+
+    neuerPlanTextArea.select();
+    neuerPlanTextArea.setSelectionRange(0, 99999);
+
+    navigator.clipboard.writeText(neuerPlanTextArea.value);
+
+    alert("Neuer Plan wurde in die Zwischenablage kopiert");
 }
 
 function calculateNewPlans(timesToRun, option) {
-    const rows = document.getElementById('data1').children[1].children;
+    const rows = document.getElementById("data1").children[1].children;
     [startPoints, endPoints, units, arrivalTimes] = [[rows.length], [rows.length], [rows.length], [rows.length]];
 
     fillOriginalPlanData(startPoints, endPoints, units, arrivalTimes);
@@ -159,19 +178,19 @@ function processAttackPlans(generatedPlans) {
 
 function findBestAttackPlan(processedAttackPlans, option) {
     switch (option) {
-        case 0: //biggest maxDistance
+        case "biggestMaxDistance":
             return processedAttackPlans.reduce(function (prev, current) {
                 return (prev && prev.maxDistance > current.maxDistance) ? prev : current;
             });
-        case 1://shortest maxDistance
+        case "shortestMaxDistance":
             return processedAttackPlans.reduce(function (prev, current) {
                 return (prev && prev.maxDistance < current.maxDistance) ? prev : current;
             });
-        case 2://biggest maxDistanceGap
+        case "biggestMaxDistanceGap":
             return processedAttackPlans.reduce(function (prev, current) {
                 return (prev && prev.maxDistanceGap > current.maxDistanceGap) ? prev : current;
             });
-        case 3://shortest maxDistanceGap
+        case "shortestMaxDistanceGap":
             return processedAttackPlans.reduce(function (prev, current) {
                 return (prev && prev.maxDistanceGap < current.maxDistanceGap) ? prev : current;
             });
@@ -182,20 +201,20 @@ function generateUltimatePlan(processedAttackPlan, isUTPlan, units, arrivalTimes
     let ultimatePlan = [processedAttackPlan.attacks.length];
     let ultimateStandardString;
     if (isUTPlan) {
-        ultimateStandardString = '&0&false&true&spear=/sword=/axe=/archer=/spy=/light=/marcher=/heavy=/ram=/catapult=/knight=/snob=/militia=MA==';
+        ultimateStandardString = "&0&false&true&spear=/sword=/axe=/archer=/spy=/light=/marcher=/heavy=/ram=/catapult=/knight=/snob=/militia=MA==";
     } else {
-        ultimateStandardString = '&8&false&true&spear=/sword=/axe=/archer=/spy=/light=/marcher=/heavy=/ram=/catapult=/knight=/snob=/militia=MA=='
+        ultimateStandardString = "&8&false&true&spear=/sword=/axe=/archer=/spy=/light=/marcher=/heavy=/ram=/catapult=/knight=/snob=/militia=MA=="
     }
     for (let i = 0; i < processedAttackPlan.attacks.length; i++) {
         const attack = processedAttackPlan.attacks[i];
-        ultimatePlan[i] = attack.startPoint.pointId + '&' + attack.endPoint.pointId + '&' + units[i] + '&' + arrivalTimes[i] + '&' + ultimateStandardString;
+        ultimatePlan[i] = attack.startPoint.pointId + "&" + attack.endPoint.pointId + "&" + units[i] + "&" + arrivalTimes[i] + "&" + ultimateStandardString;
     }
     return ultimatePlan;
 }
 
 function cancel() {
-    let eingabeContainer = document.querySelector('.col-12.d-print-none');
-    let popupDiv = eingabeContainer.querySelector('#inputForm').parentNode;
+    let eingabeContainer = document.querySelector(".col-12.d-print-none");
+    let popupDiv = eingabeContainer.querySelector("#inputForm").parentNode;
     eingabeContainer.removeChild(popupDiv);
 }
 
