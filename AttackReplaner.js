@@ -74,7 +74,7 @@ function openPopupEingabe() {
             <h2>Neuer Plan:</h2>
             <button type="button" id="neuerPlanKopierenButton">Neuen Plan in Zwischenablage kopieren</button>
             <br><br>
-            <textarea id="resultTextArea" style="width: 80%;" rows="25" readonly></textarea>
+            <textarea id="resultTextArea" style="width: 80%;" rows="10" readonly></textarea>
         </div>
         `;
 
@@ -90,7 +90,7 @@ function openPopupEingabe() {
 
 function findAndDisplayPlan() {
     const timesToRun = parseInt(document.getElementById("anzahlRechenversuche").value);
-    const option = document.getElementById("option").value;
+    const option = document.getElementById("options").value;
     const ultimatePlan = calculateNewPlans(timesToRun, option);
 
     let resultTextArea = document.getElementById("resultTextArea");
@@ -119,7 +119,7 @@ function calculateNewPlans(timesToRun, option) {
     const rows = document.getElementById("data1").children[1].children;
     [startPoints, endPoints, units, arrivalTimes] = [[rows.length], [rows.length], [rows.length], [rows.length]];
 
-    fillOriginalPlanData(startPoints, endPoints, units, arrivalTimes);
+    fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes);
 
     const allGeneratedPlans = generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun);
 
@@ -207,7 +207,7 @@ function generateUltimatePlan(processedAttackPlan, isUTPlan, units, arrivalTimes
     }
     for (let i = 0; i < processedAttackPlan.attacks.length; i++) {
         const attack = processedAttackPlan.attacks[i];
-        ultimatePlan[i] = attack.startPoint.pointId + "&" + attack.endPoint.pointId + "&" + units[i] + "&" + arrivalTimes[i] + "&" + ultimateStandardString;
+        ultimatePlan[i] = attack.startPoint.pointId + "&" + attack.endPoint.pointId + "&" + units[i] + "&" + arrivalTimes[i] + ultimateStandardString;
     }
     return ultimatePlan;
 }
@@ -218,7 +218,7 @@ function cancel() {
     eingabeContainer.removeChild(popupDiv);
 }
 
-function fillOriginalPlanData(startPoints, endPoints, rows, arrivalTimes, units) {
+function fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes) {
     for (let i = 0; i < rows.length; i++) {
         //startPoints and endPoints
         const startPointText = rows[i].children[1].innerHTML;
@@ -233,12 +233,12 @@ function fillOriginalPlanData(startPoints, endPoints, rows, arrivalTimes, units)
         startPoints[i] = new Point(parseInt(startPointCoords[0]), parseInt(startPointCoords[1]), startPointId);
         endPoints[i] = new Point(parseInt(endPointCoords[0]), parseInt(endPointCoords[1]), endPointId);
 
+        //units
+        units[i] = rows[i].children[5].innerHTML.match(/\/([a-zA-Z]+)\./)[1];
+
         //arrivalTimes
         const dateParts = rows[i].children[8].innerText.split(/[ .:]/);
         arrivalTimes[i] = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]), parseInt(dateParts[3]), parseInt(dateParts[4]), parseInt(dateParts[5]), parseInt(dateParts[6])).getTime();
-
-        //units
-        units[i] = rows[i].children[5].innerHTML.match(/\/([a-zA-Z]+)\./)[1];
     }
 }
 
