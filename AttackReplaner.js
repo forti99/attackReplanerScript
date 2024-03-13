@@ -72,9 +72,9 @@ function openPopupEingabe() {
         <form id="inputForm">
             <label>Ausgeschlossenes Zeitfenster:</label><br>
             <label for="timeWindowExcludedStart">Von:</label>
-            <input type=datetime-local step=1 id="timeWindowExcludedStart">
+            <input type=datetime-local step="1" id="timeWindowExcludedStart">
             <label for="timeWindowExcludedEnd">Bis:</label>
-            <input type=datetime-local step=1 id="timeWindowExcludedEnd"><br><br>
+            <input type=datetime-local step="1" id="timeWindowExcludedEnd"><br><br>
             <label for="options">ausgewählte Option:</label>
             <select id="options">
                 <option value="biggestMaxDistance">größte maximale Distanz</option>
@@ -91,7 +91,7 @@ function openPopupEingabe() {
             <h2>Neuer Plan:</h2>
             <button type="button" id="neuerPlanKopierenButton">Neuen Plan in Zwischenablage kopieren</button>
             <br><br>
-            <textarea id="resultTextArea" style="width: 80%;" rows="25" readonly></textarea>
+            <textarea id="resultTextArea" style="width: 80%;" rows="5" readonly></textarea>
         </div>
         `;
 
@@ -106,13 +106,16 @@ function openPopupEingabe() {
 }
 
 function findAndDisplayPlan() {
+    const startTime = Date.now();
     let timeWindowExcluded = new TimeWindow();
     timeWindowExcluded.start = document.getElementById("timeWindowExcludedStart").valueAsNumber;
     timeWindowExcluded.end = document.getElementById("timeWindowExcludedEnd").valueAsNumber;
+    adjustTimeWindowForTimeZone(timeWindowExcluded);
+
     const timesToRun = document.getElementById("anzahlRechenversuche").valueAsNumber;
-    const option = document.getElementById("option").value;
-    const worldspeed = 2; //Code for fetching worldspeed automatically missing
-    const unitModificator = 1; //Code for fetching unitModificator automatically missing
+    const option = document.getElementById("options").value;
+    const worldspeed = 1.25; //Code for fetching worldspeed automatically missing
+    const unitModificator = 0.8; //Code for fetching unitModificator automatically missing
 
     const ultimatePlan = calculateNewPlans(timeWindowExcluded, timesToRun, option, worldspeed, unitModificator);
 
@@ -125,6 +128,12 @@ function findAndDisplayPlan() {
 
     let resultDiv = document.getElementById("result");
     resultDiv.style.display = "block";
+    console.log(Date.now() - startTime);
+}
+function adjustTimeWindowForTimeZone(timeWindow){
+    const timeDifference = -3600000;
+    timeWindow.start = timeWindow.start + timeDifference;
+    timeWindow.end = timeWindow.end + timeDifference;
 }
 
 function copyNewPlanToClipboard() {
@@ -134,15 +143,13 @@ function copyNewPlanToClipboard() {
     neuerPlanTextArea.setSelectionRange(0, 99999);
 
     navigator.clipboard.writeText(neuerPlanTextArea.value);
-
-    alert("Neuer Plan wurde in die Zwischenablage kopiert");
 }
 
 function calculateNewPlans(timeWindowExcluded, timesToRun, option, worldspeed, unitModificator) {
     const rows = document.getElementById("data1").children[1].children;
     [startPoints, endPoints, units, arrivalTimes] = [[rows.length], [rows.length], [rows.length], [rows.length]];
 
-    fillOriginalPlanData(startPoints, endPoints, units, arrivalTimes);
+    fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes);
 
     const allGeneratedPlans = generateRandomAttackPlans(timeWindowExcluded, startPoints, endPoints, units, arrivalTimes, timesToRun, worldspeed, unitModificator);
 
@@ -173,12 +180,13 @@ function generateRandomAttackPlans(timeWindowExcluded, startPoints, endPoints, u
                 break;
             }
         }
+
         if (attackPlan.length === startPoints.length) {
-            attackPlan.sort(function (a, b) {
+            /*attackPlan.sort(function (a, b) {
                 if (a.distance < b.distance) return 1;
                 if (a.distance > b.distance) return -1;
                 return 0;
-            });
+            });*/
             allGeneratedAttackPlans.add(attackPlan);
         }
     }
@@ -186,7 +194,7 @@ function generateRandomAttackPlans(timeWindowExcluded, startPoints, endPoints, u
 }
 
 function calculateUnixSendTime(unit, arrivalTime, distance, worldspeed, unitModificator) {
-    return Math.round(distance * (getUnitSpeed(unit) / (worldspeed * unitModificator))) * 1000;
+    return arrivalTime - (Math.round(distance * (getUnitSpeed(unit) / (worldspeed * unitModificator))) * 1000);
 }
 
 function getUnitSpeed(unit) {
@@ -277,7 +285,7 @@ function cancel() {
     eingabeContainer.removeChild(popupDiv);
 }
 
-function fillOriginalPlanData(startPoints, endPoints, rows, arrivalTimes, units) {
+function fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes) {
     for (let i = 0; i < rows.length; i++) {
         //startPoints and endPoints
         const startPointText = rows[i].children[1].innerHTML;
