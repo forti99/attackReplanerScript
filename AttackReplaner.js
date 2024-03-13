@@ -21,12 +21,24 @@ class Point {
 }
 
 class Attack {
-    constructor(startPoint, endPoint, unit, arrivalTime, distance) {
+    constructor(startPoint, endPoint, unit, sendTime, arrivalTime, distance) {
         this.startPoint = startPoint;
         this.endPoint = endPoint;
         this.unit = unit;
+        this.sendTime = sendTime;
         this.arrivalTime = arrivalTime;
         this.distance = distance;
+    }
+}
+
+class TimeWindow {
+    constructor(start, end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    isTimeInWindow(unixTime) {
+        return unixTime > this.start && unixTime < this.end;
     }
 }
 
@@ -58,6 +70,11 @@ function openPopupEingabe() {
     let popupContent = `
         <h2>Eingabeformular</h2>
         <form id="inputForm">
+            <label>Ausgeschlossenes Zeitfenster:</label><br>
+            <label for="timeWindowExcludedStart">Von:</label>
+            <input type=datetime-local step=1 id="timeWindowExcludedStart">
+            <label for="timeWindowExcludedEnd">Bis:</label>
+            <input type=datetime-local step=1 id="timeWindowExcludedEnd"><br><br>
             <label for="options">ausgewählte Option:</label>
             <select id="options">
                 <option value="biggestMaxDistance">größte maximale Distanz</option>
@@ -74,7 +91,7 @@ function openPopupEingabe() {
             <h2>Neuer Plan:</h2>
             <button type="button" id="neuerPlanKopierenButton">Neuen Plan in Zwischenablage kopieren</button>
             <br><br>
-            <textarea id="resultTextArea" style="width: 80%;" rows="10" readonly></textarea>
+            <textarea id="resultTextArea" style="width: 80%;" rows="25" readonly></textarea>
         </div>
         `;
 
@@ -89,9 +106,15 @@ function openPopupEingabe() {
 }
 
 function findAndDisplayPlan() {
-    const timesToRun = parseInt(document.getElementById("anzahlRechenversuche").value);
-    const option = document.getElementById("options").value;
-    const ultimatePlan = calculateNewPlans(timesToRun, option);
+    let timeWindowExcluded = new TimeWindow();
+    timeWindowExcluded.start = document.getElementById("timeWindowExcludedStart").valueAsNumber;
+    timeWindowExcluded.end = document.getElementById("timeWindowExcludedEnd").valueAsNumber;
+    const timesToRun = document.getElementById("anzahlRechenversuche").valueAsNumber;
+    const option = document.getElementById("option").value;
+    const worldspeed = 2; //Code for fetching worldspeed automatically missing
+    const unitModificator = 1; //Code for fetching unitModificator automatically missing
+
+    const ultimatePlan = calculateNewPlans(timeWindowExcluded, timesToRun, option, worldspeed, unitModificator);
 
     let resultTextArea = document.getElementById("resultTextArea");
     let textWidth = ultimatePlan[0].length * 10
@@ -115,13 +138,13 @@ function copyNewPlanToClipboard() {
     alert("Neuer Plan wurde in die Zwischenablage kopiert");
 }
 
-function calculateNewPlans(timesToRun, option) {
+function calculateNewPlans(timeWindowExcluded, timesToRun, option, worldspeed, unitModificator) {
     const rows = document.getElementById("data1").children[1].children;
     [startPoints, endPoints, units, arrivalTimes] = [[rows.length], [rows.length], [rows.length], [rows.length]];
 
-    fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes);
+    fillOriginalPlanData(startPoints, endPoints, units, arrivalTimes);
 
-    const allGeneratedPlans = generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun);
+    const allGeneratedPlans = generateRandomAttackPlans(timeWindowExcluded, startPoints, endPoints, units, arrivalTimes, timesToRun, worldspeed, unitModificator);
 
     const processedAttackPlans = processAttackPlans(allGeneratedPlans);
 
@@ -130,7 +153,7 @@ function calculateNewPlans(timesToRun, option) {
     return generateUltimatePlan(bestAttackPlan, false, units, arrivalTimes);
 }
 
-function generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, timesToRun) {
+function generateRandomAttackPlans(timeWindowExcluded, startPoints, endPoints, units, arrivalTimes, timesToRun, worldspeed, unitModificator) {
     let allGeneratedAttackPlans = new Set();
     let attackPlan = [];
     for (let i = 0; i < timesToRun; i++) {
@@ -142,16 +165,52 @@ function generateRandomAttackPlans(startPoints, endPoints, units, arrivalTimes, 
             const unit = units[i];
             const arrivalTime = arrivalTimes[i];
             const distance = startPoint.calculateDistance(endPoint);
-            attackPlan.push(new Attack(startPoint, endPoint, unit, arrivalTime, distance));
+            const sendTime = calculateUnixSendTime(unit, arrivalTime, distance, worldspeed, unitModificator);
+
+            if (!timeWindowExcluded.isTimeInWindow(sendTime)) {
+                attackPlan.push(new Attack(startPoint, endPoint, unit, sendTime, arrivalTime, distance));
+            } else {
+                break;
+            }
         }
-        attackPlan.sort(function (a, b) {
-            if (a.distance < b.distance) return 1;
-            if (a.distance > b.distance) return -1;
-            return 0;
-        });
-        allGeneratedAttackPlans.add(attackPlan)
+        if (attackPlan.length === startPoints.length) {
+            attackPlan.sort(function (a, b) {
+                if (a.distance < b.distance) return 1;
+                if (a.distance > b.distance) return -1;
+                return 0;
+            });
+            allGeneratedAttackPlans.add(attackPlan);
+        }
     }
     return allGeneratedAttackPlans;
+}
+
+function calculateUnixSendTime(unit, arrivalTime, distance, worldspeed, unitModificator) {
+    return Math.round(distance * (getUnitSpeed(unit) / (worldspeed * unitModificator))) * 1000;
+}
+
+function getUnitSpeed(unit) {
+    switch (unit) {
+        case "spy":
+            return 540;
+        case "light":
+        case "knight":
+            return 600;
+        case "heavy":
+            return 660;
+        case "spear":
+        case "axe":
+            return 1080;
+        case "sword":
+            return 1320;
+        case "ram":
+        case "catapult":
+            return 1800;
+        case "snob":
+            return 2100;
+        default:
+            return -1;
+    }
 }
 
 function processAttackPlans(generatedPlans) {
@@ -207,7 +266,7 @@ function generateUltimatePlan(processedAttackPlan, isUTPlan, units, arrivalTimes
     }
     for (let i = 0; i < processedAttackPlan.attacks.length; i++) {
         const attack = processedAttackPlan.attacks[i];
-        ultimatePlan[i] = attack.startPoint.pointId + "&" + attack.endPoint.pointId + "&" + units[i] + "&" + arrivalTimes[i] + ultimateStandardString;
+        ultimatePlan[i] = attack.startPoint.pointId + "&" + attack.endPoint.pointId + "&" + units[i] + "&" + arrivalTimes[i] + "&" + ultimateStandardString;
     }
     return ultimatePlan;
 }
@@ -218,7 +277,7 @@ function cancel() {
     eingabeContainer.removeChild(popupDiv);
 }
 
-function fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes) {
+function fillOriginalPlanData(startPoints, endPoints, rows, arrivalTimes, units) {
     for (let i = 0; i < rows.length; i++) {
         //startPoints and endPoints
         const startPointText = rows[i].children[1].innerHTML;
@@ -233,12 +292,12 @@ function fillOriginalPlanData(startPoints, endPoints, rows, units, arrivalTimes)
         startPoints[i] = new Point(parseInt(startPointCoords[0]), parseInt(startPointCoords[1]), startPointId);
         endPoints[i] = new Point(parseInt(endPointCoords[0]), parseInt(endPointCoords[1]), endPointId);
 
-        //units
-        units[i] = rows[i].children[5].innerHTML.match(/\/([a-zA-Z]+)\./)[1];
-
         //arrivalTimes
         const dateParts = rows[i].children[8].innerText.split(/[ .:]/);
         arrivalTimes[i] = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]), parseInt(dateParts[3]), parseInt(dateParts[4]), parseInt(dateParts[5]), parseInt(dateParts[6])).getTime();
+
+        //units
+        units[i] = rows[i].children[5].innerHTML.match(/\/([a-zA-Z]+)\./)[1];
     }
 }
 
